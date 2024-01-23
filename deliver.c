@@ -1,67 +1,88 @@
-/*
- * deliver.c -- a datagram "client" demo
- */
+// deliver.c
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
 #include <string.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <netdb.h>
+#include <unistd.h>
 
-#define SERVERPORT "4950" // the port users will be connecting to
+#define BUFFER_SIZE 1024
 
-int main(int argc, char *argv[])
-{
+int main(int argc, char *argv[]) {
     int sockfd;
-    struct addrinfo hints, *servinfo, *p;
-    int rv;
-    int numbytes;
+    struct sockaddr_in serverAddr;
+    char buffer[BUFFER_SIZE];
+    char input[BUFFER_SIZE];
+    socklen_t addr_size;
+    char fileName[256];
+    FILE *file;
 
+    // Check command line arguments
     if (argc != 3) {
-        fprintf(stderr, "usage: talker hostname message\n");
-        exit(1);
-    }
-
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET6; // set to AF_INET to use IPv4
-    hints.ai_socktype = SOCK_DGRAM;
-
-    if ((rv = getaddrinfo(argv[1], SERVERPORT, &hints, &servinfo)) != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
+        fprintf(stderr, "Usage: %s <server address> <server port number>\n", argv[0]);
         return 1;
     }
 
-    // loop through all the results and make a socket
-    for (p = servinfo; p != NULL; p = p->ai_next) {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype,
-                             p->ai_protocol)) == -1) {
-            perror("talker: socket");
-            continue;
+    // Create UDP socket
+    sockfd = socket(PF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        return 1;
+    }
+
+    // Configure server address structure
+    memset(&serverAddr, 0, sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;
+    serverAddr.sin_port = htons(atoi(argv[2]));
+    serverAddr.sin_addr.s_addr = inet_addr(argv[1]);
+
+    // Get input from the user
+    printf("Enter the command: ");
+    fgets(input, BUFFER_SIZE, stdin);
+
+    // Extract the command and file name
+    sscanf(input, "%s %s", buffer, fileName);
+
+    // Check if the command is correct and the file exists
+    if (strcmp(buffer, "ftp") == 0) {
+        file = fopen(fileName, "r");
+        if (file) {
+            fclose(file);
+
+            // Send message "ftp" to the server
+            if (sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
+                perror("Sendto failed");
+                close(sockfd);
+                return 1;
+            }
+
+            // Wait for server's response
+            addr_size = sizeof(serverAddr);
+            if (recvfrom(sockfd, buffer, BUFFER_SIZE, 0, (struct sockaddr *)&serverAddr, &addr_size) < 0) {
+                perror("Recvfrom failed");
+                close(sockfd);
+                return 1;
+            }
+
+            buffer[BUFFER_SIZE - 1] = '\0'; // Ensure null-termination
+
+            // Check server's response
+            if (strcmp(buffer, "yes") == 0) {
+                printf("A file transfer can start.\n");
+            } 
+            else {
+                //printf("Server has denied file transfer.\n");
+                close(sockfd);
+                return 0;
+            }
+        } 
+        else {
+            printf("File '%s' not found.\n", fileName);
         }
-
-        break;
     }
 
-    if (p == NULL) {
-        fprintf(stderr, "talker: failed to create socket\n");
-        return 2;
-    }
-
-    if ((numbytes = sendto(sockfd, argv[2], strlen(argv[2]), 0,
-                           p->ai_addr, p->ai_addrlen)) == -1) {
-        perror("talker: sendto");
-        exit(1);
-    }
-
-    freeaddrinfo(servinfo);
-
-    printf("talker: sent %d bytes to %s\n", numbytes, argv[1]);
     close(sockfd);
-
     return 0;
 }

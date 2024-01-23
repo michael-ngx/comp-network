@@ -1,94 +1,84 @@
-/*
-** server.c -- a datagram sockets "server" demo
-*/
+// server.c
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
-#include <errno.h>
 #include <string.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <netdb.h>
+#include <unistd.h>
 
-#define MYPORT "4950" // the port users will be connecting to
+#define BUFFER_SIZE 1024
 
-#define MAXBUFLEN 100
+int main(int argc, char *argv[]) {
 
-// get sockaddr, IPv4 or IPv6:
-void *get_in_addr(struct sockaddr *sa)
-{
-    if (sa->sa_family == AF_INET) {
-        return &(((struct sockaddr_in*)sa)->sin_addr);
-    }
-
-    return &(((struct sockaddr_in6*)sa)->sin6_addr);
-}
-
-int main(void)
-{
     int sockfd;
-    struct addrinfo hints, *servinfo, *p;
-    int rv;
-    int numbytes;
-    struct sockaddr_storage their_addr;
-    char buf[MAXBUFLEN];
-    socklen_t addr_len;
-    char s[INET6_ADDRSTRLEN];
+    struct sockaddr_in serverAddr, clientAddr;
+    char buffer[BUFFER_SIZE];
+    socklen_t addr_size;
+    int nBytes;
 
-    memset(&hints, 0, sizeof hints);
-    hints.ai_family = AF_INET6; // set to AF_INET to use IPv4
-    hints.ai_socktype = SOCK_DGRAM;
-    hints.ai_flags = AI_PASSIVE; // use my IP
-
-    if ((rv = getaddrinfo(NULL, MYPORT, &hints, &servinfo)) != 0) {
-        fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-        return 1;
+    // Check command line arguments
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <UDP listen port>\n", argv[0]);
+        exit(EXIT_FAILURE);
     }
 
-    // loop through all the results and bind to the first we can
-    for(p = servinfo; p != NULL; p = p->ai_next) {
-        if ((sockfd = socket(p->ai_family, p->ai_socktype,
-                             p->ai_protocol)) == -1) {
-            perror("listener: socket");
+    // Create UDP socket
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);  //AF_NET -- IPV4 internet protocol, SOCK_DGRAM -- type of socket: UDP 
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // Configure server address structure
+    memset(&serverAddr, 0, sizeof(serverAddr));
+    serverAddr.sin_family = AF_INET;                //-- IPV4 internet protocol
+    serverAddr.sin_port = htons(atoi(argv[1]));     // port number to listen to
+    serverAddr.sin_addr.s_addr = htonl(INADDR_ANY); // Listen on all interfaces
+
+    socklen_t serverAddrLength = sizeof(serverAddr);
+
+    // Bind socket with address struct (address = IP + port Number)
+    if (bind(sockfd, (const struct sockaddr *) &serverAddr, serverAddrLength) < 0) {
+        perror("Bind failed");
+        close(sockfd);
+        exit(EXIT_FAILURE);
+    }
+
+    // Initialize size variable to be used later on
+    addr_size = sizeof(clientAddr);
+
+    printf("Server is listening on port %s\n", argv[1]); //output message to show that server is active and ready to listen
+
+    while (1) {
+        // Try to receive any incoming UDP datagram. Address and port of requesting client will be stored on clientAddr
+        nBytes = recvfrom(sockfd, buffer, BUFFER_SIZE, 0, (struct sockaddr *) &clientAddr, &addr_size);
+        
+        if (nBytes < 0) {
+            perror("Error in receiving data");
             continue;
         }
-        if (bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
-        close(sockfd);
-        perror("listener: bind");
-        continue;
+
+        buffer[nBytes] = '\0'; // Null-terminate the received data
+
+        // Respond to the client based on the message received
+        if (strcmp(buffer, "ftp") == 0) {
+            strcpy(buffer, "yes");
+        } else {
+            strcpy(buffer, "no");
+        }
+
+        // Send the response back to the client
+        nBytes = sendto(sockfd, buffer, strlen(buffer), 0, (const struct sockaddr *) &clientAddr, addr_size);
+
+        if (nBytes < 0) {
+            perror("Error in sending data");
+        }
     }
 
-    break;
+    close(sockfd);
+    return 0;
 }
 
-if (p == NULL) {
-    fprintf(stderr, "listener: failed to bind socket\n");
-    return 2;
-}
 
-freeaddrinfo(servinfo);
-
-printf("listener: waiting to recvfrom...\n");
-
-addr_len = sizeof their_addr;
-if ((numbytes = recvfrom(sockfd, buf, MAXBUFLEN-1, 0,
-                         (struct sockaddr *)&their_addr, &addr_len)) == -1) {
-    perror("recvfrom");
-    exit(1);
-}
-
-printf("listener: got packet from %s\n",
-       inet_ntop(their_addr.ss_family,
-                 get_in_addr((struct sockaddr *)&their_addr),
-                 s, sizeof s));
-printf("listener: packet is %d bytes long\n", numbytes);
-buf[numbytes] = '\0';
-printf("listener: packet contains \"%s\"\n", buf);
-
-close(sockfd);
-
-return 0;
-}
