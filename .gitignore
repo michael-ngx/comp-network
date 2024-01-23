@@ -1,3 +1,5 @@
 *.o
-deliver
-server
+**/*.o
+
+lab1/deliver
+lab1/server
