@@ -26,7 +26,7 @@ int main(int argc, char *argv[]) {
     }
 
     // Create UDP socket
-    sockfd = socket(PF_INET, SOCK_DGRAM, 0);
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
         perror("Socket creation failed");
         return 1;
@@ -39,7 +39,7 @@ int main(int argc, char *argv[]) {
     serverAddr.sin_addr.s_addr = inet_addr(argv[1]);
 
     // Get input from the user
-    printf("Enter the command: ");
+    printf("Enter ftp <file name>: ");
     fgets(input, BUFFER_SIZE, stdin);
 
     // Extract the command and file name
