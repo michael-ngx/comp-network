@@ -126,7 +126,7 @@ int main(int argc, char *argv[]) {
         nBytes = sendto(sockfd, buffer, strlen(buffer), 0, (const struct sockaddr *) &clientAddr, addr_size);
 
         if (nBytes < 0) {
-            perror("Error in sending data");
+            perror("Error in sending yes/no first response");
         }
 
         while(1){
@@ -135,7 +135,6 @@ int main(int argc, char *argv[]) {
                 perror("Error in receiving data");
                 continue;
             }
-            printf("here");
 
             if(string_to_packet(packet_buffer,PACKET_SIZE,&pkt) == -1){
                 perror("failed to convert string to packet");
@@ -146,8 +145,6 @@ int main(int argc, char *argv[]) {
             if(sendto(sockfd, "ACK", strlen("ACK"), 0, (struct sockaddr *)&clientAddr, addr_size) < 0){
                 perror("Error in sending ACK");
             }
-            
-            //printf("%s",packet_buffer);
 
             // Open file on first packet
             if (pkt.frag_no == 1) {
@@ -158,7 +155,7 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            // Write data to file
+            // Write data to file. If the last fragment is received, close the file
             if (file) {
                 fwrite(pkt.filedata, 1, pkt.size, file);
 

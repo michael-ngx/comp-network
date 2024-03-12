@@ -7,6 +7,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <unistd.h>
+#include <time.h>
 
 #define BUFFER_SIZE 1024
 #define DATA_SIZE 1000
@@ -26,13 +27,13 @@ int packet_to_string(const struct packet *pkt, char *buffer, size_t buffer_size)
                                pkt->total_frag, pkt->frag_no, pkt->size, pkt->filename);
 
     if (header_size < 0 || header_size >= buffer_size) {
-        // Error occurred or buffer is not large enough
+        // Error occurred or packet_buffer is not large enough
         return -1;
     }
 
     // Ensure that the buffer is large enough for the header and the binary data
     if (header_size + pkt->size > buffer_size) {
-        // Not enough space
+        // Not enough space in packet_buffer
         return -1;
     }
 
@@ -54,6 +55,7 @@ int main(int argc, char *argv[]) {
     FILE *file;
     int total_fragments = 0;
     char ack[20];
+    time_t begin, end;
 
     // Check command line arguments
     if (argc != 3) {
@@ -86,6 +88,7 @@ int main(int argc, char *argv[]) {
         file = fopen(fileName, "r");
         if (file) {
 
+            begin = time(NULL);
             // Send message "ftp" to the server
             if (sendto(sockfd, buffer, strlen(buffer), 0, (struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
                 perror("Sendto failed");
@@ -100,6 +103,8 @@ int main(int argc, char *argv[]) {
                 close(sockfd);
                 return 1;
             }
+            end = time(NULL);
+            printf("Round trip time: %f ms\n", difftime(end, begin));
 
             buffer[BUFFER_SIZE - 1] = '\0'; // Ensure null-termination
 
@@ -130,7 +135,7 @@ int main(int argc, char *argv[]) {
 
                 packet.total_frag = total_fragments;
                 packet.frag_no = sequenceNumber;
-                packet.size = fread(packet.filedata,1,DATA_SIZE,file);
+                packet.size = fread(packet.filedata,1,DATA_SIZE,file);  // Read (1000) bytes from file to packet.filedata
                 strcpy(packet.filename,fileName);
                 
                 if(packet_to_string(&packet,packet_buffer,PACKET_SIZE) == -1){
@@ -171,7 +176,7 @@ int main(int argc, char *argv[]) {
             printf("File transfer completed.\n");
             fclose(file);//put at end
         } 
-        else {
+    else {
             printf("File '%s' not found.\n", fileName);
         }
     }

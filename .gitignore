@@ -4,5 +4,5 @@
 *.gz
 **/*.gz
 
-lab1/deliver
-lab1/server
+**/deliver
+**/server
