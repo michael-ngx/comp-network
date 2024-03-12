@@ -16,15 +16,12 @@
 #include "user.h"
 // #include "session.h"
 
-#define ULISTFILE "userlist.txt"    // File of username and passwords   
-#define INBUF_SIZE 64   			// Input buffer
+#define ULISTFILE "userlist.txt"    // Server username and passwords database
 #define BACKLOG 10	    			// how many pending connections queue will hold
 
 User *userList = NULL; 			// List of all users and passwords
 User *userLoggedin = NULL;		// List of users logged in
 Session *sessionList;			// List of all sessions created
-char inBuf[INBUF_SIZE] = {0};  	// Input buffer
-char port[6] = {0}; 			// Store port in string for getaddrinfo
 int sessionCnt = 1;			// Session count begins from 1
 int userConnectedCnt = 0;			// Count of users connected
 
@@ -333,23 +330,6 @@ void *new_client(void *arg) {
             pktSend.type = QU_ACK;
             toSend = 1;
 
-            // for(Session *curSess = sessionList; curSess != NULL; curSess = curSess -> next) {
-            // 	cursor += sprintf((char *)(pktSend.data) + cursor, "Session %d:", curSess -> sessionId);
-            // 	for(User *usr = curSess -> usr; usr != NULL; usr = usr -> next) {
-            // 		cursor += sprintf((char *)(pktSend.data) + cursor, "\t%s", usr -> uname);
-            // 	}
-            // 	// Add carrige return after each session
-            // 	pktSend.data[cursor++] = '\n';
-            // }
-            // // Users not in any session
-            // cursor += sprintf((char *)(pktSend.data) + cursor, "Not In Any Session:");
-            // for(User *usr = userLoggedin; usr != NULL; usr = usr -> next) {
-            // 	if(usr -> inSession == 0) {
-            // 		cursor += sprintf((char *)(pktSend.data) + cursor, "\t%s", usr -> uname);
-            // 	}
-            // }
-            // printf("\n");
-
             for(User *usr = userLoggedin; usr != NULL; usr = usr -> next) {
                 cursor += sprintf((char *)(pktSend.data) + cursor, "%s", usr -> uname);
                 for(Session *sess = usr -> sessJoined; sess != NULL; sess = sess -> next) {
@@ -420,19 +400,13 @@ void *new_client(void *arg) {
 }
 
 
-int main() {
-    // Get user input
-    memset(inBuf, 0, INBUF_SIZE * sizeof(char));
-    fgets(inBuf, INBUF_SIZE, stdin);
-    char *pch;
-    if((pch = strstr(inBuf, "server ")) != NULL) {
-        memcpy(port, pch + 7, sizeof(char) * (strlen(pch + 7) - 1));
-    } else {
-        perror("Usage: server -<TCP port number to listen on>\n");
-        exit(1);
+int main(int argc, char *argv[]) {
+    // Check command line arguments
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <TCP listen port>\n", argv[0]);
+        exit(EXIT_FAILURE);
     }
-    printf("Server: starting at port %s...\n", port);
-
+    printf("Server: starting at port %s...\n", argv[1]);
 
     // Load userlist at startup
     FILE *fp;
@@ -461,7 +435,7 @@ int main() {
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;    // Use TCP
     hints.ai_flags = AI_PASSIVE;        // use my IP
-    if ((rv = getaddrinfo(NULL, port, &hints, &servinfo)) != 0) {
+    if ((rv = getaddrinfo(NULL, argv[1], &hints, &servinfo)) != 0) {
         fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
         return 1;
     }

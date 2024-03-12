@@ -78,9 +78,7 @@ User *init_userlist(FILE *fp) {
         if(r == EOF) {
             free(usr);
             break;
-        }
-        // usr -> next = root;
-        // root = usr;        
+        }      
         root = add_user(root, usr);
     }
     return root;

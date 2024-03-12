@@ -44,7 +44,7 @@ int main() {
             send_text(socketfd);
 		}
 	}
-	fprintf(stdout, "You have quit successfully.\n");
+	fprintf(stdout, "Terminating connection.\n");
 	return 0;
 }
 
@@ -65,9 +65,8 @@ void *receive(void *socketfd_void_p) {
         }
         if (numbytes == 0) continue;
         buf[numbytes] = 0;
-        //fprintf(stdout, "buf: %s\n", buf);
         stringToPacket(buf, &packet);
-        //fprintf(stdout, "packet.type: %d, packet.data: %s\n", packet.type, packet.data);
+        
         if (packet.type == JN_ACK) {
             fprintf(stdout, "Successfully joined session %s.\n", packet.data);
             insession = true;
@@ -91,7 +90,6 @@ void *receive(void *socketfd_void_p) {
 	return NULL;
 }
 
-// get sockaddr, IPv4 or IPv6:
 void *get_in_addr(struct sockaddr *sa) {
     if (sa->sa_family == AF_INET) {
         return &(((struct sockaddr_in*)sa)->sin_addr);
@@ -117,46 +115,38 @@ void login(char *pch, int *socketfd_p, pthread_t *receive_thread_p) {
 	server_port = pch;
 
 	if (client_id == NULL || password == NULL || server_ip == NULL || server_port == NULL) {
-		fprintf(stdout, "usage: /login <client_id> <password> <server_ip> <server_port>\n");
+		fprintf(stdout, "Usage: /login <client_id> <password> <server_ip> <server_port>\n");
 		return;
 	} else if (*socketfd_p != INVALID_SOCKET) {
-		fprintf(stdout, "Error. Already logged in to a server");
+		fprintf(stdout, "Already logged in to a server");
 		return;
 	} else {
 		// Connect TCP
-		int retval;
-		struct addrinfo hints, *servinfo, *p;
-		char s[INET6_ADDRSTRLEN];
-		memset(&hints, 0, sizeof hints);
-		hints.ai_family = AF_UNSPEC;
-		hints.ai_socktype = SOCK_STREAM;
-		
-		if ((retval = getaddrinfo(server_ip, server_port, &hints, &servinfo)) != 0) {
-			fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(retval));
-			return;
-		}
-		for (p = servinfo; p != NULL; p = p->ai_next) {
-			if ((*socketfd_p = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
-				fprintf(stderr ,"client: socket\n");
-				continue;
-			}
-			if (connect(*socketfd_p, p->ai_addr, p->ai_addrlen) == -1) {
-				close(*socketfd_p);
-				fprintf(stderr, "client: connect\n");
-				continue;
-			}
-			break; 
-		}
-		if (p == NULL) {
-			fprintf(stderr, "client: failed to connect from addrinfo\n");
-			close(*socketfd_p);
-            *socketfd_p = INVALID_SOCKET;
+        int sockfd = socket(AF_INET, SOCK_STREAM, 0);
+        if (sockfd < 0) {
+            perror("Socket creation failed");
             return;
-		}
-		inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
-		printf("client: connecting to %s\n", s);
-		freeaddrinfo(servinfo); // all done with this structure
+        }
 
+        // Configure server address structure
+        struct sockaddr_in serverAddr;
+        memset(&serverAddr, 0, sizeof(serverAddr));
+        serverAddr.sin_family = AF_INET;
+        serverAddr.sin_port = htons(atoi(server_port));
+        serverAddr.sin_addr.s_addr = inet_addr(server_ip);
+
+        socklen_t serverAddrLength = sizeof(serverAddr);
+
+        // Attempt to connect to the server with TCP
+        if (connect(sockfd, (struct sockaddr *) &serverAddr, serverAddrLength) < 0) {
+            perror("Create TCP connection failed");
+            close(sockfd);
+            return;
+        }
+
+        ///////////////////////////////////////////////////////////////////////////
+
+        // Send LOGIN packet
 		int numbytes;
         Packet packet;
         packet.type = LOGIN;
@@ -179,21 +169,20 @@ void login(char *pch, int *socketfd_p, pthread_t *receive_thread_p) {
 		}
         buf[numbytes] = 0; 
         stringToPacket(buf, &packet);
-        if (packet.type == LO_ACK && 
-            pthread_create(receive_thread_p, NULL, receive, socketfd_p) == 0) {
-        fprintf(stdout, "login successful.\n");  
+
+        if (packet.type == LO_ACK && pthread_create(receive_thread_p, NULL, receive, socketfd_p) == 0) {
+            fprintf(stdout, "login successful.\n");  
         } else if (packet.type == LO_NAK) {
-        fprintf(stdout, "login failed. Detail: %s\n", packet.data);
-        close(*socketfd_p);
-        *socketfd_p = INVALID_SOCKET;
-                return;
+            fprintf(stdout, "login failed. Detail: %s\n", packet.data);
+            close(*socketfd_p);
+            *socketfd_p = INVALID_SOCKET;
+            return;
         } else {
-        fprintf(stdout, "Unexpected packet received: type %d, data %s\n", 
-            packet.type, packet.data);
-        close(*socketfd_p);
-        *socketfd_p = INVALID_SOCKET;
-                return;
-        } 
+            fprintf(stdout, "Unexpected packet received: type %d, data %s\n", packet.type, packet.data);
+            close(*socketfd_p);
+            *socketfd_p = INVALID_SOCKET;
+            return;
+        }
 	}
 }
 
@@ -232,12 +221,14 @@ void joinsession(char *pch, int *socketfd_p) {
         return;
     }
 
+    // Extract session name
 	char *session_id;
 	pch = strtok(NULL, " ");
 	session_id = pch;
 	if (session_id == NULL) {
 		fprintf(stdout, "usage: /joinsession <session_id>\n");
 	} else {
+        // Join session packet (JOIN)
 		int numbytes;
         Packet packet;
         packet.type = JOIN;
@@ -247,7 +238,7 @@ void joinsession(char *pch, int *socketfd_p) {
 		if ((numbytes = send(*socketfd_p, buf, BUF_SIZE - 1, 0)) == -1) {
 			fprintf(stderr, "client: send\n");
 			return;
-		}	
+		}
 	}
 }
 
