@@ -98,7 +98,6 @@ void *new_client(void *arg) {
 
                 // Check if user already joined
                 bool alreadyJnd = in_list(userLoggedin, newUsr);				
-
                 bool vldusr = is_valid_user(userList, newUsr);
                 // Clear user password for safety
                 memset(newUsr -> pwd, 0, PWDLEN);
@@ -141,10 +140,54 @@ void *new_client(void *arg) {
                     // memset(newUsr -> uname, 0, UNAMELEN);
                     toExit = 1;
                 }
+
+            } else if (pktRecv.type == REGISTER) {
+                // Parse username and password (THAT THE USER WANTS TO REGISTER WITH)
+                int cursor = 0;
+                strcpy(newUsr -> uname, (char *)(pktRecv.source));
+                strcpy(newUsr -> pwd, (char *)(pktRecv.data));
+                printf("Desired new user Name: %s\n", newUsr -> uname);
+                printf("Desired new user pwd: %s\n", newUsr -> pwd);
+
+                // Check if user already exists
+                if(in_list(userList, newUsr)) {
+                    pktSend.type = REG_NAK;
+                    toSend = 1;
+                    strcpy((char *)(pktSend.data), "User already exists");
+                    printf("Failed to register\n");
+                } else {
+                    // Add to userlist file
+                    FILE *fp;
+                    if((fp = fopen(ULISTFILE, "a")) == NULL) {
+                        fprintf(stderr, "Can't open input file %s\n", ULISTFILE);
+                    }
+                    fprintf(fp, "\n%s %s", newUsr -> uname, newUsr -> pwd);
+                    fclose(fp);
+
+                    pktSend.type = REG_ACK;
+                    toSend = 1;
+                    loggedin = 1;
+
+                    // Add user to userList and userLoggedin list
+                    User *tmp = malloc(sizeof(User));
+                    memcpy(tmp, newUsr, sizeof(User));
+                    User *tmp2 = malloc(sizeof(User));
+                    memcpy(tmp2, newUsr, sizeof(User));
+                    pthread_mutex_lock(&userLoggedin_mutex);
+                    userList = add_user(userList, tmp);
+                    userLoggedin = add_user(userLoggedin, tmp2);
+                    pthread_mutex_unlock(&userLoggedin_mutex);
+
+                    // Save username
+                    strcpy(source, newUsr -> uname);
+
+                    printf("User %s: Successfully registered and logged in...\n", newUsr -> uname);
+                }
+
             } else {
                 pktSend.type = LO_NAK;
                 toSend = 1;
-                strcpy((char *)(pktSend.data), "Please log in first");
+                strcpy((char *)(pktSend.data), "Please log in or register first");
             }
         }
 

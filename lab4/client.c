@@ -55,7 +55,7 @@ void *get_in_addr(struct sockaddr *sa) {
     *             socketfd_p - a pointer to the socket file descriptor
     *             receive_thread_p - a pointer to the receive thread
 *****************************************************************************/
-void login(char *pch, int *socketfd_p, pthread_t *receive_thread_p) {
+void login(char *pch, int *socketfd_p, pthread_t *receive_thread_p, bool is_register) {
 	char *client_id, *password, *server_ip, *server_port;
 	pch = strtok(NULL, " ");
 	client_id = pch;
@@ -66,13 +66,19 @@ void login(char *pch, int *socketfd_p, pthread_t *receive_thread_p) {
 	pch = strtok(NULL, " \n");
 	server_port = pch;
 	if (client_id == NULL || password == NULL || server_ip == NULL || server_port == NULL) {
-		fprintf(stdout, "Usage: /login <client_id> <password> <server_ip> <server_port>\n");
+		if (is_register) {
+			fprintf(stdout, "Usage: /register <client_id> <password> <server_ip> <server_port>\n");
+		} else {
+			fprintf(stdout, "Usage: /login <client_id> <password> <server_ip> <server_port>\n");
+		}
 		return;
 	} else if (*socketfd_p != INVALID_SOCKET) {
 		fprintf(stdout, "Already logged in to a server");
 		return;
 	} else {
-		// prepare to connect through TCP protocol
+		/*******************************************************
+		// Connect through TCP protocol
+		********************************************************/
 		int rv;
 		struct addrinfo hints, *servinfo, *p;
 		char s[INET6_ADDRSTRLEN];
@@ -104,11 +110,17 @@ void login(char *pch, int *socketfd_p, pthread_t *receive_thread_p) {
 		}
 		inet_ntop(p->ai_family, get_in_addr((struct sockaddr *)p->ai_addr), s, sizeof s);
 		printf("client: connecting to %s\n", s);
-		freeaddrinfo(servinfo); // all done with this structure
+		freeaddrinfo(servinfo);
+		/********************************************************
+		********************************************************/
 
 		int numbytes;
 		Packet packet;
-		packet.type = LOGIN;
+		if (is_register) {
+			packet.type = REGISTER;
+		} else {
+			packet.type = LOGIN;
+		}
 		strncpy(packet.source, client_id, MAX_NAME);
 		strncpy(packet.data, password, MAX_DATA);
 		packet.size = strlen(packet.data);
@@ -128,11 +140,21 @@ void login(char *pch, int *socketfd_p, pthread_t *receive_thread_p) {
 		}
 		buf[numbytes] = 0; 
 		stringToPacket(buf, &packet);
-		if (packet.type == LO_ACK && 
+		if (is_register == false &&
+			packet.type == LO_ACK && 
 			pthread_create(receive_thread_p, NULL, receive, socketfd_p) == 0) {
 			fprintf(stdout, "login successful.\n");  
-		} else if (packet.type == LO_NAK) {
+		} else if (is_register == false && packet.type == LO_NAK) {
 			fprintf(stdout, "login failed. Detail: %s\n", packet.data);
+			close(*socketfd_p);
+			*socketfd_p = INVALID_SOCKET;
+			return;
+		} else if (is_register == true &&
+				   packet.type == REG_ACK &&
+				   pthread_create(receive_thread_p, NULL, receive, socketfd_p) == 0) {
+			fprintf(stdout, "register and login successful.\n");
+		} else if (is_register == true && packet.type == REG_NAK) {
+			fprintf(stdout, "register and login failed. Detail: %s\n", packet.data);
 			close(*socketfd_p);
 			*socketfd_p = INVALID_SOCKET;
 			return;
@@ -277,7 +299,13 @@ void send_text(int socketfd) {
 		fprintf(stderr, "client: send\n");
 		return; 
 	}
+}
 
+/*****************************************************************************
+ * Register a user to the server, then log in
+*****************************************************************************/
+void register_user(char *pch, int *socketfd_p, pthread_t *receive_thread_p) {
+	login(pch, socketfd_p, receive_thread_p, true);
 }
 
 int main() {
@@ -301,7 +329,7 @@ int main() {
 		pch = strtok(buf, " ");
 		toklen = strlen(pch);
 		if (strcmp(pch, LOGIN_CMD) == 0) {
-			login(pch, &socketfd, &receive_thread);
+			login(pch, &socketfd, &receive_thread, false);
 		} else if (strcmp(pch, LOGOUT_CMD) == 0) {
 			logout(&socketfd, &receive_thread);
 		} else if (strcmp(pch, JOINSESSION_CMD) == 0) {
@@ -315,6 +343,8 @@ int main() {
 		} else if (strcmp(pch, QUIT_CMD) == 0) {
 			logout(&socketfd, &receive_thread);
 			break;
+		} else if (strcmp(pch, REGISTER_CMD) == 0) {
+			register_user(pch, &socketfd, &receive_thread);
 		} else {
 			// restore the buffer to send the original text
 			buf[toklen] = ' ';
