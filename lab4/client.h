@@ -19,6 +19,7 @@ const char *CREATESESSION_CMD = "/createsession";
 const char *LIST_CMD = "/list";
 const char *QUIT_CMD = "/quit";
 const char *REGISTER_CMD = "/register";
+const char *DM_CMD = "/dm";
 
 void *receive(void *socketfd_void_p);
 void *get_in_addr(struct sockaddr *sa);
@@ -30,5 +31,6 @@ void createsession(int socketfd);
 void list(int socketfd);
 void send_text(int socketfd);
 void register_user(char *pch, int *socketfd_p, pthread_t *receive_thread_p);
+void dm(char *pch, int socketfd);
 
 #endif

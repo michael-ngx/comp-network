@@ -26,7 +26,9 @@ enum msgType {
     QU_ACK,
     REGISTER,
     REG_ACK,
-    REG_NAK
+    REG_NAK,
+    DM,
+    DM_NAK
 };
 
 typedef struct message {

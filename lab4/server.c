@@ -363,6 +363,59 @@ void *new_client(void *arg) {
             toSend = 0;
         }
 
+        else if (pktRecv.type == DM) {
+            // Extract user name to be sent, and the message
+            char* pch;
+            char* target_user, * message;
+
+            // Extract target user and message
+            pch = strtok(pktRecv.data, " ");
+            target_user = pch;
+            pch = strtok(NULL, "\n");
+            message = pch;
+            printf("Target User: %s\n", target_user);
+            printf("Message: %s\n", message);
+
+            if (target_user == NULL || message == NULL) {
+                printf("Wrong format for DM\n");	
+                pktSend.type = DM_NAK;
+                toSend = 1;
+                strcpy((char *)(pktSend.data), "Usage: /dm <target_usr> <message>");
+            }
+
+            // Prepare message to be sent
+            memset(&pktSend, 0, sizeof(Packet));
+            pktSend.type = MESSAGE;
+            strcpy((char *)(pktSend.source), newUsr -> uname);
+            strcpy((char *)(pktSend.data), message);
+            pktSend.size = strlen((char *)(pktSend.data));
+
+            memset(buffer, 0, sizeof(char) * BUF_SIZE);
+            packetToString(&pktSend, buffer);
+
+            // Find the target user (across all sessions) and send them a DM
+            // Check if the target user is within the userLoggedin list
+            bool target_online = false;
+            for (User *usr = userLoggedin; usr != NULL; usr = usr -> next) {
+                if (strcmp(usr -> uname, target_user) == 0) {
+                    target_online = true;
+                    // Send DM
+                    if((bytesSent = send(usr -> sockfd, buffer, BUF_SIZE - 1, 0)) == -1) {
+                        perror("error send\n");
+                        exit(1);
+                    }
+                    break;
+                }
+            }
+
+            if (!target_online) {
+                printf("Target user is not online\n");	
+                pktSend.type = DM_NAK;
+                toSend = 1;
+                strcpy((char *)(pktSend.data), "Target user is not logged in/do not exist");
+            }
+        }
+
 
         // Respond user query
         else if(pktRecv.type == QUERY) {

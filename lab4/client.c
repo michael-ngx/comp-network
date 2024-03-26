@@ -7,7 +7,7 @@ char buf[BUF_SIZE];
 bool insession = false;
 
 void *receive(void *socketfd_void_p) {
-	// receive may get: JN_ACK, JN_NAC, NS_ACK, QU_ACK, MESSAGE
+	// receive may get: JN_ACK, JN_NAC, NS_ACK, QU_ACK, MESSAGE, DM_NAK
 	// only LOGIN packet is not listened by receive
 	int *socketfd_p = (int *)socketfd_void_p;
 	int numbytes;
@@ -34,6 +34,8 @@ void *receive(void *socketfd_void_p) {
 			fprintf(stdout, "User id\t\tSession ids\n%s", packet.data);
 		} else if (packet.type == MESSAGE){   
 			fprintf(stdout, "%s: %s\n", packet.source, packet.data);
+		} else if (packet.type == DM_NAK) {
+			fprintf(stdout, "DM failure. Detail: %s\n", packet.data);
 		} else {
 			fprintf(stdout, "Unexpected packet received: type %d, data %s\n",packet.type, packet.data);
 		}
@@ -159,7 +161,7 @@ void login(char *pch, int *socketfd_p, pthread_t *receive_thread_p, bool is_regi
 			*socketfd_p = INVALID_SOCKET;
 			return;
 		} else {
-			fprintf(stdout, "Unexpected packet received: type %d, data %s\n", packet.type, packet.data);
+			fprintf(stdout, "Unexpected packet received in log in: type %d, data %s\n", packet.type, packet.data);
 			close(*socketfd_p);
 			*socketfd_p = INVALID_SOCKET;
 			return;
@@ -308,6 +310,42 @@ void register_user(char *pch, int *socketfd_p, pthread_t *receive_thread_p) {
 	login(pch, socketfd_p, receive_thread_p, true);
 }
 
+/*****************************************************************************
+ * Direct message
+*****************************************************************************/
+void dm(char *pch, int socketfd) {
+	if (socketfd == INVALID_SOCKET) {
+		fprintf(stdout, "You have not logged in to any server.\n");
+		return;
+	}
+
+	// Because there are only 2 fields in the packet to send to the server,
+	// need to parse target user and message inside server.c
+	char *target_usr_and_message;
+	pch = strtok(NULL, "\n");
+	target_usr_and_message = pch;
+
+	if (target_usr_and_message == NULL) {
+		fprintf(stdout, "Usage: /dm <target_usr> <message>\n");
+		return;
+	}
+
+	int numbytes;
+	Packet packet;
+	packet.type = DM;
+	strncpy(packet.data, target_usr_and_message, MAX_DATA);
+	packet.size = strlen(packet.data);
+	packetToString(&packet, buf);
+
+	if ((numbytes = send(socketfd, buf, BUF_SIZE - 1, 0)) == -1) {
+		fprintf(stderr, "client: send\n");
+		return;
+	}
+}
+
+/*****************************************************************************
+ * MAIN
+*****************************************************************************/
 int main() {
 	char *pch;
 	int toklen;
@@ -345,6 +383,8 @@ int main() {
 			break;
 		} else if (strcmp(pch, REGISTER_CMD) == 0) {
 			register_user(pch, &socketfd, &receive_thread);
+		} else if (strcmp(pch, DM_CMD) == 0) {
+			dm(pch, socketfd);
 		} else {
 			// restore the buffer to send the original text
 			buf[toklen] = ' ';
