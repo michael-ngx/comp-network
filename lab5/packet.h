@@ -23,7 +23,13 @@ enum msgType {
     NS_ACK,
     MESSAGE,
     QUERY,
-    QU_ACK
+    QU_ACK,
+    REGISTER,
+    REG_ACK,
+    REG_NAK,
+    DM,
+    DM_MESSAGE,
+    DM_NAK
 };
 
 typedef struct message {

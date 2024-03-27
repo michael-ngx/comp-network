@@ -18,19 +18,15 @@ const char *LEAVESESSION_CMD = "/leavesession";
 const char *CREATESESSION_CMD = "/createsession";
 const char *LIST_CMD = "/list";
 const char *QUIT_CMD = "/quit";
-const char *REGISTER_CMD = "/register";
-const char *DM_CMD = "/dm";
 
 void *receive(void *socketfd_void_p);
 void *get_in_addr(struct sockaddr *sa);
-void login(char *pch, int *socketfd_p, pthread_t *receive_thread_p, bool is_register);
+void login(char *pch, int *socketfd_p, pthread_t *receive_thread_p);
 void logout(int *socketfd_p, pthread_t *receive_thread_p);
 void joinsession(char *pch, int *socketfd_p);
 void leavesession(int socketfd);
 void createsession(int socketfd);
 void list(int socketfd);
 void send_text(int socketfd);
-void register_user(char *pch, int *socketfd_p, pthread_t *receive_thread_p);
-void dm(char *pch, int socketfd);
 
 #endif

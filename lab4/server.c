@@ -98,6 +98,7 @@ void *new_client(void *arg) {
 
                 // Check if user already joined
                 bool alreadyJnd = in_list(userLoggedin, newUsr);				
+
                 bool vldusr = is_valid_user(userList, newUsr);
                 // Clear user password for safety
                 memset(newUsr -> pwd, 0, PWDLEN);
@@ -140,54 +141,10 @@ void *new_client(void *arg) {
                     // memset(newUsr -> uname, 0, UNAMELEN);
                     toExit = 1;
                 }
-
-            } else if (pktRecv.type == REGISTER) {
-                // Parse username and password (THAT THE USER WANTS TO REGISTER WITH)
-                int cursor = 0;
-                strcpy(newUsr -> uname, (char *)(pktRecv.source));
-                strcpy(newUsr -> pwd, (char *)(pktRecv.data));
-                printf("Desired new user Name: %s\n", newUsr -> uname);
-                printf("Desired new user pwd: %s\n", newUsr -> pwd);
-
-                // Check if user already exists
-                if(in_list(userList, newUsr)) {
-                    pktSend.type = REG_NAK;
-                    toSend = 1;
-                    strcpy((char *)(pktSend.data), "User already exists");
-                    printf("Failed to register\n");
-                } else {
-                    // Add to userlist file
-                    FILE *fp;
-                    if((fp = fopen(ULISTFILE, "a")) == NULL) {
-                        fprintf(stderr, "Can't open input file %s\n", ULISTFILE);
-                    }
-                    fprintf(fp, "\n%s %s", newUsr -> uname, newUsr -> pwd);
-                    fclose(fp);
-
-                    pktSend.type = REG_ACK;
-                    toSend = 1;
-                    loggedin = 1;
-
-                    // Add user to userList and userLoggedin list
-                    User *tmp = malloc(sizeof(User));
-                    memcpy(tmp, newUsr, sizeof(User));
-                    User *tmp2 = malloc(sizeof(User));
-                    memcpy(tmp2, newUsr, sizeof(User));
-                    pthread_mutex_lock(&userLoggedin_mutex);
-                    userList = add_user(userList, tmp);
-                    userLoggedin = add_user(userLoggedin, tmp2);
-                    pthread_mutex_unlock(&userLoggedin_mutex);
-
-                    // Save username
-                    strcpy(source, newUsr -> uname);
-
-                    printf("User %s: Successfully registered and logged in...\n", newUsr -> uname);
-                }
-
             } else {
                 pktSend.type = LO_NAK;
                 toSend = 1;
-                strcpy((char *)(pktSend.data), "Please log in or register first");
+                strcpy((char *)(pktSend.data), "Please log in first");
             }
         }
 
@@ -230,7 +187,7 @@ void *new_client(void *arg) {
 
                 printf("User %s: Succeeded join session %d\n", newUsr -> uname, sessionId);
 
-                // Update user status in userLoggedin
+                // Update user status in userConnected
                 pthread_mutex_lock(&userLoggedin_mutex);
                 for(User *usr = userLoggedin; usr != NULL; usr = usr -> next) {
                     if(strcmp(usr -> uname, source) == 0) {
@@ -264,7 +221,7 @@ void *new_client(void *arg) {
             }
 
             packetToString(&pktSend, buffer);
-            // Update user status in userLoggedin;
+            // Update user status in userConnected;
             pthread_mutex_lock(&userLoggedin_mutex);
             for(User *usr = userLoggedin; usr != NULL; usr = usr -> next) {
                 if(strcmp(usr -> uname, source) == 0) {
@@ -361,59 +318,6 @@ void *new_client(void *arg) {
             }
             printf("\n");
             toSend = 0;
-        }
-
-        else if (pktRecv.type == DM) {
-            // Extract user name to be sent, and the message
-            char* pch;
-            char* target_user, * message;
-
-            // Extract target user and message
-            pch = strtok(pktRecv.data, " ");
-            target_user = pch;
-            pch = strtok(NULL, "\n");
-            message = pch;
-            printf("Target User: %s\n", target_user);
-            printf("Message: %s\n", message);
-
-            if (target_user == NULL || message == NULL) {
-                printf("Wrong format for DM\n");	
-                pktSend.type = DM_NAK;
-                toSend = 1;
-                strcpy((char *)(pktSend.data), "Usage: /dm <target_usr> <message>");
-            }
-
-            // Prepare message to be sent
-            memset(&pktSend, 0, sizeof(Packet));
-            pktSend.type = DM_MESSAGE;
-            strcpy((char *)(pktSend.source), newUsr -> uname);
-            strcpy((char *)(pktSend.data), message);
-            pktSend.size = strlen((char *)(pktSend.data));
-
-            memset(buffer, 0, sizeof(char) * BUF_SIZE);
-            packetToString(&pktSend, buffer);
-
-            // Find the target user (across all sessions) and send them a DM
-            // Check if the target user is within the userLoggedin list
-            bool target_online = false;
-            for (User *usr = userLoggedin; usr != NULL; usr = usr -> next) {
-                if (strcmp(usr -> uname, target_user) == 0) {
-                    target_online = true;
-                    // Send DM
-                    if((bytesSent = send(usr -> sockfd, buffer, BUF_SIZE - 1, 0)) == -1) {
-                        perror("error send\n");
-                        exit(1);
-                    }
-                    break;
-                }
-            }
-
-            if (!target_online) {
-                printf("Target user is not online\n");	
-                pktSend.type = DM_NAK;
-                toSend = 1;
-                strcpy((char *)(pktSend.data), "Target user is not logged in/do not exist");
-            }
         }
 
 
