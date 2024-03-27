@@ -28,6 +28,7 @@ enum msgType {
     REG_ACK,
     REG_NAK,
     DM,
+    DM_MESSAGE,
     DM_NAK
 };
 

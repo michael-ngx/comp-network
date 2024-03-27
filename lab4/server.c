@@ -230,7 +230,7 @@ void *new_client(void *arg) {
 
                 printf("User %s: Succeeded join session %d\n", newUsr -> uname, sessionId);
 
-                // Update user status in userConnected
+                // Update user status in userLoggedin
                 pthread_mutex_lock(&userLoggedin_mutex);
                 for(User *usr = userLoggedin; usr != NULL; usr = usr -> next) {
                     if(strcmp(usr -> uname, source) == 0) {
@@ -264,7 +264,7 @@ void *new_client(void *arg) {
             }
 
             packetToString(&pktSend, buffer);
-            // Update user status in userConnected;
+            // Update user status in userLoggedin;
             pthread_mutex_lock(&userLoggedin_mutex);
             for(User *usr = userLoggedin; usr != NULL; usr = usr -> next) {
                 if(strcmp(usr -> uname, source) == 0) {
@@ -385,7 +385,7 @@ void *new_client(void *arg) {
 
             // Prepare message to be sent
             memset(&pktSend, 0, sizeof(Packet));
-            pktSend.type = MESSAGE;
+            pktSend.type = DM_MESSAGE;
             strcpy((char *)(pktSend.source), newUsr -> uname);
             strcpy((char *)(pktSend.data), message);
             pktSend.size = strlen((char *)(pktSend.data));

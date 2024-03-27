@@ -33,8 +33,11 @@ void *receive(void *socketfd_void_p) {
 		} else if (packet.type == QU_ACK) {
 			fprintf(stdout, "User id\t\tSession ids\n%s", packet.data);
 		} else if (packet.type == MESSAGE){   
-			fprintf(stdout, "%s: %s\n", packet.source, packet.data);
-		} else if (packet.type == DM_NAK) {
+			fprintf(stdout, "Broadcast %s: %s\n", packet.source, packet.data);
+		} else if (packet.type == DM_MESSAGE){   
+			fprintf(stdout, "DM %s: %s\n", packet.source, packet.data);
+		}
+		 else if (packet.type == DM_NAK) {
 			fprintf(stdout, "DM failure. Detail: %s\n", packet.data);
 		} else {
 			fprintf(stdout, "Unexpected packet received: type %d, data %s\n",packet.type, packet.data);
